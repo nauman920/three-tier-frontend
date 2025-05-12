@@ -7,35 +7,43 @@ const API_URL = process.env.REACT_APP_API_URL;
 function App() {
   const [items, setItems] = useState([]);
   const [input, setInput] = useState('');
-  const [error, setError] = useState(false); // NEW
+  const [error, setError] = useState(false);
 
   const fetchItems = async () => {
     try {
       const response = await axios.get(`${API_URL}/api/items`);
-  
-      // Check for valid HTTP response
+
       if (response.status !== 200) {
         throw new Error(`Unexpected response status: ${response.status}`);
       }
-  
+
       const data = response.data;
-  
-      // Check if the response is an array
+
       if (Array.isArray(data)) {
         setItems(data);
-        setError(false); // ✅ Success, reset error
+        setError(false);
       } else {
         console.warn("Expected array but received:", data);
-        setItems([]);       // ⛔ Don't break the UI
-        setError(true);     // ⚠️ Show error in UI
+        setItems([]);
+        setError("invalidData");
       }
     } catch (err) {
       console.error("Error fetching items from backend:", err.message || err);
-      setItems([]);         // ⛔ Prevent `.map()` crash
-      setError(true);       // ⚠️ Show error message in UI
+      setItems([]);
+
+      // Detect mixed content error (HTTPS page calling HTTP API)
+      if (
+        err.message?.includes("Network Error") &&
+        window.location.protocol === "https:" &&
+        API_URL.startsWith("http:")
+      ) {
+        setError("mixedContent");
+      } else {
+        setError("network");
+      }
     }
   };
-  
+
   useEffect(() => {
     fetchItems();
   }, []);
@@ -50,7 +58,7 @@ function App() {
       await fetchItems();
     } catch (error) {
       console.error('Error adding item:', error);
-      setError(true); // Optional: show error if post fails
+      setError("network");
     }
   };
 
@@ -60,7 +68,7 @@ function App() {
       await fetchItems();
     } catch (error) {
       console.error('Error deleting item:', error);
-      setError(true); // Optional
+      setError("network");
     }
   };
 
@@ -86,8 +94,14 @@ function App() {
           </button>
         </form>
 
-        {error ? (
-          <p className="error-state">❗ No data loaded — backend may not be connected.</p>
+        {error === "mixedContent" ? (
+          <p className="error-state">
+            ❗ Mixed Content Error — This HTTPS page tried to call an HTTP API. Please use HTTPS in your API_URL.
+          </p>
+        ) : error === "network" ? (
+          <p className="error-state">❗ Network Error — backend may not be connected.</p>
+        ) : error === "invalidData" ? (
+          <p className="error-state">❗ Invalid response from backend — expected an array of items.</p>
         ) : items.length > 0 ? (
           <ul className="item-list">
             {items.map(item => (
